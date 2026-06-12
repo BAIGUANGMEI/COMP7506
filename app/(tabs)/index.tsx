@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 
 import { ApiStatusCard } from '@/components/ApiStatusCard';
 import { CategoryStrip } from '@/components/CategoryStrip';
+import { DocumentActionSheet } from '@/components/DocumentActionSheet';
 import { DocumentRow } from '@/components/DocumentRow';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Screen } from '@/components/Screen';
@@ -12,15 +13,32 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { StatsRow } from '@/components/StatsRow';
 import { colors, radii, typography } from '@/constants/theme';
 import { useAppData } from '@/data/AppProvider';
+import type { DocumentRecord } from '@/domain/types';
 
 export default function LibraryScreen() {
   const router = useRouter();
-  const { analyze, categories, documents, importDocument, isReady, settings, stats } = useAppData();
+  const {
+    analyze,
+    categories,
+    deleteDocument,
+    documents,
+    importDocument,
+    isReady,
+    setSelectedDocumentId,
+    settings,
+    stats,
+  } = useAppData();
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [busyDocumentId, setBusyDocumentId] = useState<string | null>(null);
+  const [actionDocumentId, setActionDocumentId] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+
+  const actionDocument = useMemo(
+    () => documents.find((document) => document.id === actionDocumentId) ?? null,
+    [actionDocumentId, documents],
+  );
 
   const filteredDocuments = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -53,6 +71,15 @@ export default function LibraryScreen() {
     } finally {
       setBusyDocumentId(null);
     }
+  };
+
+  const openDocument = (document: DocumentRecord) => {
+    router.push(`/document/${document.id}`);
+  };
+
+  const askDocument = (document: DocumentRecord) => {
+    setSelectedDocumentId(document.id);
+    router.push('/ask');
   };
 
   if (!isReady) {
@@ -116,7 +143,7 @@ export default function LibraryScreen() {
             key={document.id}
             document={document}
             onAnalyze={() => handleAnalyze(document.id)}
-            onMore={() => router.push(`/document/${document.id}`)}
+            onMore={() => setActionDocumentId(document.id)}
             onPress={() => router.push(`/document/${document.id}`)}
           />
         ))}
@@ -134,6 +161,16 @@ export default function LibraryScreen() {
 
       <PrimaryButton label="Open Import Flow" icon="tray-arrow-up" variant="subtle" onPress={() => router.push('/import')} />
       {busyDocumentId ? <Text style={styles.busyText}>Analyzing selected document...</Text> : null}
+      <DocumentActionSheet
+        busy={busyDocumentId === actionDocument?.id}
+        document={actionDocument}
+        onAnalyze={(document) => handleAnalyze(document.id)}
+        onAsk={askDocument}
+        onClose={() => setActionDocumentId(null)}
+        onDelete={(document) => deleteDocument(document.id)}
+        onOpen={openDocument}
+        visible={Boolean(actionDocument)}
+      />
     </Screen>
   );
 }

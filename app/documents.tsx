@@ -4,11 +4,12 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { CategoryStrip } from '@/components/CategoryStrip';
+import { DocumentActionSheet } from '@/components/DocumentActionSheet';
 import { DocumentRow } from '@/components/DocumentRow';
 import { Screen } from '@/components/Screen';
 import { colors, radii, typography } from '@/constants/theme';
 import { useAppData } from '@/data/AppProvider';
-import type { AnalysisStatus } from '@/domain/types';
+import type { AnalysisStatus, DocumentRecord } from '@/domain/types';
 import { goBackOrHome } from '@/utils/navigation';
 
 const STATUS_FILTERS: Array<{ label: string; value: AnalysisStatus | 'all' }> = [
@@ -20,11 +21,17 @@ const STATUS_FILTERS: Array<{ label: string; value: AnalysisStatus | 'all' }> = 
 
 export default function DocumentsScreen() {
   const router = useRouter();
-  const { analyze, categories, documents } = useAppData();
+  const { analyze, categories, deleteDocument, documents, setSelectedDocumentId } = useAppData();
   const [query, setQuery] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<AnalysisStatus | 'all'>('all');
   const [busyDocumentId, setBusyDocumentId] = useState<string | null>(null);
+  const [actionDocumentId, setActionDocumentId] = useState<string | null>(null);
+
+  const actionDocument = useMemo(
+    () => documents.find((document) => document.id === actionDocumentId) ?? null,
+    [actionDocumentId, documents],
+  );
 
   const filteredDocuments = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -49,6 +56,15 @@ export default function DocumentsScreen() {
     } finally {
       setBusyDocumentId(null);
     }
+  };
+
+  const openDocument = (document: DocumentRecord) => {
+    router.push(`/document/${document.id}`);
+  };
+
+  const askDocument = (document: DocumentRecord) => {
+    setSelectedDocumentId(document.id);
+    router.push('/ask');
   };
 
   return (
@@ -115,7 +131,7 @@ export default function DocumentsScreen() {
           document={document}
           key={document.id}
           onAnalyze={() => handleAnalyze(document.id)}
-          onMore={() => router.push(`/document/${document.id}`)}
+          onMore={() => setActionDocumentId(document.id)}
           onPress={() => router.push(`/document/${document.id}`)}
         />
       ))}
@@ -129,6 +145,16 @@ export default function DocumentsScreen() {
       ) : null}
 
       {busyDocumentId ? <Text style={styles.busyText}>Analyzing selected document...</Text> : null}
+      <DocumentActionSheet
+        busy={busyDocumentId === actionDocument?.id}
+        document={actionDocument}
+        onAnalyze={(document) => handleAnalyze(document.id)}
+        onAsk={askDocument}
+        onClose={() => setActionDocumentId(null)}
+        onDelete={(document) => deleteDocument(document.id)}
+        onOpen={openDocument}
+        visible={Boolean(actionDocument)}
+      />
     </Screen>
   );
 }

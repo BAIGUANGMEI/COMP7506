@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
+import { DocumentActionSheet } from '@/components/DocumentActionSheet';
 import { DocumentRow } from '@/components/DocumentRow';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { ProgressPanel } from '@/components/ProgressPanel';
@@ -10,11 +11,16 @@ import { Screen } from '@/components/Screen';
 import { SectionHeader } from '@/components/SectionHeader';
 import { colors, radii, typography } from '@/constants/theme';
 import { useAppData } from '@/data/AppProvider';
+import type { DocumentRecord } from '@/domain/types';
 
 export default function ImportScreen() {
   const router = useRouter();
-  const { analyze, documents, importDocument, importProgress, settings } = useAppData();
+  const { analyze, deleteDocument, documents, importDocument, importProgress, setSelectedDocumentId, settings } = useAppData();
   const [working, setWorking] = useState(false);
+  const [busyDocumentId, setBusyDocumentId] = useState<string | null>(null);
+  const [actionDocumentId, setActionDocumentId] = useState<string | null>(null);
+
+  const actionDocument = documents.find((document) => document.id === actionDocumentId) ?? null;
 
   const handleImportAndAnalyze = async () => {
     setWorking(true);
@@ -27,6 +33,24 @@ export default function ImportScreen() {
     } finally {
       setWorking(false);
     }
+  };
+
+  const handleAnalyze = async (documentId: string) => {
+    setBusyDocumentId(documentId);
+    try {
+      await analyze(documentId);
+    } finally {
+      setBusyDocumentId(null);
+    }
+  };
+
+  const openDocument = (document: DocumentRecord) => {
+    router.push(`/document/${document.id}`);
+  };
+
+  const askDocument = (document: DocumentRecord) => {
+    setSelectedDocumentId(document.id);
+    router.push('/ask');
   };
 
   return (
@@ -88,11 +112,22 @@ export default function ImportScreen() {
         <DocumentRow
           document={document}
           key={document.id}
-          onAnalyze={() => analyze(document.id)}
-          onMore={() => router.push(`/document/${document.id}`)}
+          onAnalyze={() => handleAnalyze(document.id)}
+          onMore={() => setActionDocumentId(document.id)}
           onPress={() => router.push(`/document/${document.id}`)}
         />
       ))}
+      {busyDocumentId ? <Text style={styles.busyText}>Analyzing selected document...</Text> : null}
+      <DocumentActionSheet
+        busy={busyDocumentId === actionDocument?.id}
+        document={actionDocument}
+        onAnalyze={(document) => handleAnalyze(document.id)}
+        onAsk={askDocument}
+        onClose={() => setActionDocumentId(null)}
+        onDelete={(document) => deleteDocument(document.id)}
+        onOpen={openDocument}
+        visible={Boolean(actionDocument)}
+      />
     </Screen>
   );
 }
@@ -189,5 +224,11 @@ const styles = StyleSheet.create({
     color: colors.textSoft,
     fontSize: typography.body,
     fontWeight: '700',
+  },
+  busyText: {
+    color: colors.muted,
+    fontSize: typography.small,
+    marginTop: 12,
+    textAlign: 'center',
   },
 });
