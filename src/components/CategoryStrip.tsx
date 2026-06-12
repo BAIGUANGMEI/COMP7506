@@ -12,10 +12,9 @@ interface CategoryStripProps {
   categories: Category[];
   selectedCategoryId?: string | null;
   onSelect?: (categoryId: string) => void;
-  onManageCategories?: () => void;
 }
 
-export function CategoryStrip({ categories, selectedCategoryId, onManageCategories, onSelect }: CategoryStripProps) {
+export function CategoryStrip({ categories, selectedCategoryId, onSelect }: CategoryStripProps) {
   const scrollViewRef = useRef<ScrollView>(null);
   const [scrollX, setScrollX] = useState(0);
 
@@ -89,12 +88,6 @@ export function CategoryStrip({ categories, selectedCategoryId, onManageCategori
             </View>
           </Pressable>
         ))}
-        {onManageCategories ? (
-          <Pressable accessibilityRole="button" onPress={onManageCategories} style={styles.more}>
-            <MaterialCommunityIcons name="dots-horizontal" size={26} color={colors.muted} />
-            <Text style={styles.moreText}>More</Text>
-          </Pressable>
-        ) : null}
       </ScrollView>
       <Pressable
         accessibilityLabel="Scroll categories right"
@@ -154,16 +147,6 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: typography.small,
     marginTop: 3,
-  },
-  more: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 54,
-  },
-  moreText: {
-    color: colors.muted,
-    fontSize: typography.tiny,
-    marginTop: 6,
   },
   arrowButton: {
     alignItems: 'center',

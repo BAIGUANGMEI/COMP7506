@@ -105,7 +105,6 @@ export default function LibraryScreen() {
       />
       <CategoryStrip
         categories={categories}
-        onManageCategories={() => router.push('/settings')}
         selectedCategoryId={selectedCategoryId}
         onSelect={(categoryId) => setSelectedCategoryId((current) => (current === categoryId ? null : categoryId))}
       />

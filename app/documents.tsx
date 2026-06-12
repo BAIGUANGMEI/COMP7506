@@ -89,7 +89,6 @@ export default function DocumentsScreen() {
 
       <CategoryStrip
         categories={categories}
-        onManageCategories={() => router.push('/settings')}
         onSelect={(categoryId) => setSelectedCategoryId((current) => (current === categoryId ? null : categoryId))}
         selectedCategoryId={selectedCategoryId}
       />
