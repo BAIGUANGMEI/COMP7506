@@ -29,6 +29,7 @@ import type {
 import { answerDocumentQuestion, analyzeDocument } from '@/services/analysisService';
 import { pickAndImportDocument } from '@/services/importService';
 import { clearKimiApiKey, loadModelSettings, saveModelSettings } from '@/services/modelSettings';
+import { deleteWebStoredFile, isWebStoredFileUri } from '@/services/webFileStore';
 import { createId } from '@/utils/ids';
 
 interface AppContextValue {
@@ -207,7 +208,13 @@ export function AppProvider({ children }: PropsWithChildren) {
       const db = await getDatabase();
       const document = await getDocument(db, documentId);
 
-      if (document && !document.localUri.startsWith('demo://')) {
+      if (document && isWebStoredFileUri(document.localUri)) {
+        try {
+          await deleteWebStoredFile(document.localUri);
+        } catch {
+          // Keep deleting the database record even if the browser file was already gone.
+        }
+      } else if (document && !document.localUri.startsWith('demo://')) {
         try {
           await FileSystem.deleteAsync(document.localUri, { idempotent: true });
         } catch {

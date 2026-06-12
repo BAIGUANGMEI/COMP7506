@@ -1,8 +1,10 @@
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
 
 import { getDatabase, insertDocument } from '@/data/database';
 import type { DocumentRecord } from '@/domain/types';
+import { storeWebFile } from '@/services/webFileStore';
 import { formatBytes, getFileType, safeFileName, stripExtension } from '@/utils/files';
 import { createId } from '@/utils/ids';
 
@@ -19,6 +21,7 @@ export async function pickAndImportDocument(): Promise<DocumentRecord | null> {
       'text/markdown',
       'text/plain',
     ],
+    base64: false,
   });
 
   if (result.canceled) {
@@ -35,7 +38,18 @@ export async function pickAndImportDocument(): Promise<DocumentRecord | null> {
   const destination = `${DOCUMENT_DIR}${documentId}-${safeFileName(asset.name)}`;
   let localUri = asset.uri;
 
-  if (FileSystem.documentDirectory) {
+  if (Platform.OS === 'web' && asset.file) {
+    try {
+      localUri = await storeWebFile({
+        id: documentId,
+        name: asset.name,
+        type: asset.mimeType ?? asset.file.type,
+        blob: asset.file,
+      });
+    } catch {
+      localUri = asset.uri;
+    }
+  } else if (FileSystem.documentDirectory) {
     await FileSystem.makeDirectoryAsync(DOCUMENT_DIR, { intermediates: true });
 
     try {

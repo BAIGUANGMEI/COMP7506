@@ -111,6 +111,7 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   await ensureFtsIndex(db);
 
   await seedDatabase(db);
+  await recoverInterruptedAnalyses(db);
 }
 
 async function ensureFtsIndex(db: SQLite.SQLiteDatabase): Promise<void> {
@@ -273,6 +274,28 @@ async function seedDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
     'INSERT OR REPLACE INTO app_meta (key, value) VALUES (?, ?)',
     'demoSeeded',
     'true',
+  );
+}
+
+async function recoverInterruptedAnalyses(db: SQLite.SQLiteDatabase): Promise<void> {
+  const now = new Date();
+  const staleCutoff = new Date(now.getTime() - 5 * 60 * 1000).toISOString();
+
+  await db.runAsync(
+    `
+    UPDATE documents
+    SET analysisStatus = 'failed',
+        notes = CASE
+          WHEN notes = '' THEN 'Analysis was interrupted before it finished. Run analysis again.'
+          ELSE notes
+        END,
+        analyzedAt = NULL,
+        updatedAt = ?
+    WHERE analysisStatus = 'analyzing'
+      AND updatedAt < ?
+    `,
+    now.toISOString(),
+    staleCutoff,
   );
 }
 

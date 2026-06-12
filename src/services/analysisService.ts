@@ -1,4 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
 
 import {
   getDatabase,
@@ -14,6 +15,7 @@ import type { ConversationMessage, DocumentRecord, DocumentSummary, ModelSetting
 import { KimiClient } from '@/services/kimiClient';
 import { getKimiApiKey } from '@/services/modelSettings';
 import { renderKeyPdfPages } from '@/services/pdfPageRenderer';
+import { isWebStoredFileUri, readWebStoredText } from '@/services/webFileStore';
 import { buildLocalSummary, chunksToCitations, chunkText, findRelevantChunks } from '@/utils/text';
 
 export async function analyzeDocument(
@@ -32,63 +34,73 @@ export async function analyzeDocument(
     analysisStatus: 'analyzing',
     notes: '',
   });
-  onProgress?.('Reading document', 'Preparing text extraction and local chunks.');
 
-  const apiKey = await getKimiApiKey();
-  const client = settings.hasApiKey && apiKey ? new KimiClient(settings, apiKey) : null;
-  const extractedText = await extractText(document, client);
+  try {
+    onProgress?.('Reading document', 'Preparing text extraction and local chunks.');
 
-  onProgress?.('Chunking content', 'Building searchable local document context.');
-  const chunks = chunkText(document.id, extractedText);
-  const effectiveChunks =
-    chunks.length > 0
-      ? chunks
-      : chunkText(
-          document.id,
-          `${document.title}\n\nNo readable text could be extracted. Add Kimi API credentials or try a text-based file.`,
-        );
+    const apiKey = await getKimiApiKey();
+    const client = settings.hasApiKey && apiKey ? new KimiClient(settings, apiKey) : null;
+    const extractedText = await extractText(document, client);
 
-  await replaceChunks(db, document.id, effectiveChunks);
+    onProgress?.('Chunking content', 'Building searchable local document context.');
+    const chunks = chunkText(document.id, extractedText);
+    const effectiveChunks =
+      chunks.length > 0
+        ? chunks
+        : chunkText(
+            document.id,
+            `${document.title}\n\nNo readable text could be extracted. Add Kimi API credentials or try a text-based file.`,
+          );
 
-  onProgress?.('Checking key pages', 'PDF visual page analysis runs for rendered key pages only.');
-  const visualNotes =
-    client && document.fileType === 'pdf'
-      ? await client.analyzeVisualPages({
+    await replaceChunks(db, document.id, effectiveChunks);
+
+    onProgress?.('Checking key pages', 'PDF visual page analysis runs for rendered key pages only.');
+    const visualNotes =
+      client && document.fileType === 'pdf'
+        ? await client.analyzeVisualPages({
+            title: document.title,
+            pageImages: await renderKeyPdfPages(document),
+          })
+        : [];
+
+    onProgress?.('Generating summary', client ? 'Calling Kimi for a concise study summary.' : 'Creating an offline draft summary.');
+    const generated = client
+      ? await client.summarizeDocument({
           title: document.title,
-          pageImages: await renderKeyPdfPages(document),
+          chunks: effectiveChunks,
+          visualNotes,
         })
-      : [];
+      : buildLocalSummary(document.title, effectiveChunks, visualNotes);
 
-  onProgress?.('Generating summary', client ? 'Calling Kimi for a concise study summary.' : 'Creating an offline draft summary.');
-  const generated = client
-    ? await client.summarizeDocument({
-        title: document.title,
-        chunks: effectiveChunks,
-        visualNotes,
-      })
-    : buildLocalSummary(document.title, effectiveChunks, visualNotes);
+    const summary: DocumentSummary = {
+      documentId: document.id,
+      overview: generated.overview,
+      keyPoints: generated.keyPoints,
+      outline: generated.outline,
+      terms: generated.terms,
+      readingGuide: generated.readingGuide,
+      updatedAt: new Date().toISOString(),
+    };
 
-  const summary: DocumentSummary = {
-    documentId: document.id,
-    overview: generated.overview,
-    keyPoints: generated.keyPoints,
-    outline: generated.outline,
-    terms: generated.terms,
-    readingGuide: generated.readingGuide,
-    updatedAt: new Date().toISOString(),
-  };
+    await saveSummary(db, summary);
+    await updateDocumentStatus(db, document.id, {
+      analysisStatus: 'analyzed',
+      analyzedAt: summary.updatedAt,
+      notes:
+        visualNotes.length === 0 && document.fileType === 'pdf'
+          ? 'Text summary is ready. Native PDF page rendering is prepared as an extension boundary for visual page analysis.'
+          : document.notes,
+    });
 
-  await saveSummary(db, summary);
-  await updateDocumentStatus(db, document.id, {
-    analysisStatus: 'analyzed',
-    analyzedAt: summary.updatedAt,
-    notes:
-      visualNotes.length === 0 && document.fileType === 'pdf'
-        ? 'Text summary is ready. Native PDF page rendering is prepared as an extension boundary for visual page analysis.'
-        : document.notes,
-  });
-
-  return summary;
+    return summary;
+  } catch (error) {
+    await updateDocumentStatus(db, document.id, {
+      analysisStatus: 'failed',
+      analyzedAt: null,
+      notes: error instanceof Error ? error.message : 'Analysis failed.',
+    });
+    throw error;
+  }
 }
 
 export async function answerDocumentQuestion(input: {
@@ -144,6 +156,15 @@ async function extractText(document: DocumentRecord, client: KimiClient | null):
 
   if (document.fileType === 'txt' || document.fileType === 'md') {
     try {
+      if (isWebStoredFileUri(document.localUri)) {
+        return await readWebStoredText(document.localUri);
+      }
+
+      if (Platform.OS === 'web') {
+        const response = await fetch(document.localUri);
+        return await response.text();
+      }
+
       return await FileSystem.readAsStringAsync(document.localUri);
     } catch {
       return '';

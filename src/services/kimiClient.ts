@@ -1,4 +1,7 @@
+import { Platform } from 'react-native';
+
 import type { Citation, DocumentChunk, DocumentSummary, FileType, ModelSettings } from '@/domain/types';
+import { isWebStoredFileUri, readWebStoredBlob } from '@/services/webFileStore';
 import { mimeTypeForFile } from '@/utils/files';
 
 type ChatMessage =
@@ -49,11 +52,7 @@ export class KimiClient {
   }): Promise<string> {
     const form = new FormData();
     form.append('purpose', 'file-extract');
-    form.append('file', {
-      uri: file.uri,
-      name: file.name,
-      type: mimeTypeForFile(file.type),
-    } as unknown as Blob);
+    await appendFileToForm(form, file);
 
     const upload = await fetch(`${this.apiBase}/files`, {
       method: 'POST',
@@ -199,6 +198,39 @@ export class KimiClient {
       Authorization: `Bearer ${this.apiKey}`,
     };
   }
+}
+
+async function appendFileToForm(
+  form: FormData,
+  file: {
+    uri: string;
+    name: string;
+    type: FileType;
+  },
+): Promise<void> {
+  const mimeType = mimeTypeForFile(file.type);
+
+  if (Platform.OS === 'web') {
+    const blob = isWebStoredFileUri(file.uri) ? await readWebStoredBlob(file.uri) : await fetchBlob(file.uri);
+    const typedBlob = blob.type ? blob : new Blob([await blob.arrayBuffer()], { type: mimeType });
+    form.append('file', typedBlob, file.name);
+    return;
+  }
+
+  form.append('file', {
+    uri: file.uri,
+    name: file.name,
+    type: mimeType,
+  } as unknown as Blob);
+}
+
+async function fetchBlob(uri: string): Promise<Blob> {
+  const response = await fetch(uri);
+  if (!response.ok) {
+    throw new Error(`Could not read selected file before upload (${response.status}).`);
+  }
+
+  return response.blob();
 }
 
 function parseSummaryJson(content: string): Omit<DocumentSummary, 'documentId' | 'updatedAt'> {
