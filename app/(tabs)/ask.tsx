@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 
+import { MarkdownText } from '@/components/MarkdownText';
 import { Screen } from '@/components/Screen';
 import { colors, radii, typography } from '@/constants/theme';
 import { useAppData } from '@/data/AppProvider';
@@ -236,44 +237,54 @@ export default function AskScreen() {
           </View>
         ) : null}
 
-        <ScrollView contentContainerStyle={styles.messages} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={[styles.messages, messages.length === 0 && styles.messagesEmpty]}
+          showsVerticalScrollIndicator={false}
+          style={styles.messageScroller}
+        >
           {messages.length === 0 ? (
             <View style={styles.empty}>
-              <MaterialCommunityIcons name="message-question-outline" size={36} color={colors.primary} />
-              <Text style={styles.emptyTitle}>Start with a study question</Text>
-              <Text style={styles.emptyCopy}>Try "What should I review first?" or "Explain the core theorem."</Text>
+              <View style={styles.emptyIcon}>
+                <MaterialCommunityIcons name="message-text-outline" size={30} color={colors.primary} />
+              </View>
+              <Text style={styles.emptyTitle}>No messages yet</Text>
+              <Text style={styles.emptyCopy}>Ask about the selected document whenever you are ready.</Text>
             </View>
           ) : (
             messages.map((message) => <MessageBubble key={message.id} message={message} />)
           )}
           {loading ? (
-            <View style={styles.loadingRow}>
-              <ActivityIndicator color={colors.primary} />
-              <Text style={styles.loadingText}>Reading sources...</Text>
+            <View style={[styles.messageRow, styles.assistantRow]}>
+              <View style={styles.assistantAvatar}>
+                <MaterialCommunityIcons name="assistant" size={17} color={colors.primary} />
+              </View>
+              <View style={[styles.bubble, styles.assistantBubble, styles.typingBubble]}>
+                <ActivityIndicator color={colors.primary} />
+                <Text style={styles.loadingText}>Reading sources...</Text>
+              </View>
             </View>
           ) : null}
         </ScrollView>
 
-        <View style={styles.quickPrompts}>
-          {['Summarize the hardest part', 'Make a revision checklist', 'Quiz me'].map((prompt) => (
-            <Pressable key={prompt} onPress={() => setQuestion(prompt)} style={styles.prompt}>
-              <Text style={styles.promptText}>{prompt}</Text>
+        <View style={styles.composerShell}>
+          <View style={styles.composer}>
+            <TextInput
+              multiline
+              onChangeText={setQuestion}
+              placeholder="Message StudyVault..."
+              placeholderTextColor={colors.faint}
+              style={styles.input}
+              value={question}
+            />
+            <Pressable
+              accessibilityRole="button"
+              disabled={loading || !question.trim()}
+              onPress={handleAsk}
+              style={[styles.sendButton, (loading || !question.trim()) && styles.sendButtonDisabled]}
+            >
+              <MaterialCommunityIcons name="arrow-up" size={21} color={colors.surface} />
             </Pressable>
-          ))}
-        </View>
-
-        <View style={styles.composer}>
-          <TextInput
-            multiline
-            onChangeText={setQuestion}
-            placeholder="Ask about this document..."
-            placeholderTextColor={colors.faint}
-            style={styles.input}
-            value={question}
-          />
-          <Pressable accessibilityRole="button" disabled={loading || !question.trim()} onPress={handleAsk} style={styles.sendButton}>
-            <MaterialCommunityIcons name="send" size={20} color={colors.surface} />
-          </Pressable>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Screen>
@@ -309,17 +320,28 @@ function MessageBubble({ message }: { message: ConversationMessage }) {
   const isUser = message.role === 'user';
 
   return (
-    <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-      <Text style={[styles.bubbleText, isUser && styles.userBubbleText]}>{message.content}</Text>
-      {!isUser && message.citations.length > 0 ? (
-        <View style={styles.citations}>
-          {message.citations.slice(0, 3).map((citation) => (
-            <Text key={`${citation.label}-${citation.excerpt}`} style={styles.citation}>
-              {citation.label}
-            </Text>
-          ))}
+    <View style={[styles.messageRow, isUser ? styles.userRow : styles.assistantRow]}>
+      {!isUser ? (
+        <View style={styles.assistantAvatar}>
+          <MaterialCommunityIcons name="assistant" size={17} color={colors.primary} />
         </View>
       ) : null}
+      <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
+        {isUser ? (
+          <Text style={[styles.bubbleText, styles.userBubbleText]}>{message.content}</Text>
+        ) : (
+          <MarkdownText content={message.content} />
+        )}
+        {!isUser && message.citations.length > 0 ? (
+          <View style={styles.citations}>
+            {message.citations.slice(0, 3).map((citation) => (
+              <Text key={`${citation.label}-${citation.excerpt}`} style={styles.citation}>
+                {citation.label}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -503,15 +525,30 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   messages: {
-    gap: 12,
-    paddingBottom: 16,
+    flexGrow: 1,
+    gap: 14,
+    paddingBottom: 14,
     paddingTop: 14,
+  },
+  messagesEmpty: {
+    justifyContent: 'center',
+  },
+  messageScroller: {
+    flex: 1,
   },
   empty: {
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 220,
     paddingHorizontal: 24,
+  },
+  emptyIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.primarySoft,
+    borderRadius: radii.pill,
+    height: 58,
+    justifyContent: 'center',
+    width: 58,
   },
   emptyTitle: {
     color: colors.text,
@@ -528,18 +565,46 @@ const styles = StyleSheet.create({
   },
   bubble: {
     borderRadius: radii.md,
-    maxWidth: '88%',
+    flexShrink: 1,
+    minWidth: 0,
     padding: 13,
   },
+  messageRow: {
+    alignItems: 'flex-end',
+    flexDirection: 'row',
+    gap: 9,
+    width: '100%',
+  },
+  userRow: {
+    justifyContent: 'flex-end',
+  },
+  assistantRow: {
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+  },
+  assistantAvatar: {
+    alignItems: 'center',
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.border,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    height: 32,
+    justifyContent: 'center',
+    width: 32,
+  },
   userBubble: {
-    alignSelf: 'flex-end',
     backgroundColor: colors.primary,
+    borderBottomRightRadius: radii.sm,
+    flexShrink: 1,
+    maxWidth: '82%',
   },
   assistantBubble: {
-    alignSelf: 'flex-start',
     backgroundColor: colors.surface,
+    borderBottomLeftRadius: radii.sm,
     borderColor: colors.border,
     borderWidth: 1,
+    flexShrink: 1,
+    maxWidth: '80%',
   },
   bubbleText: {
     color: colors.text,
@@ -564,42 +629,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  loadingRow: {
+  typingBubble: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: 8,
-    paddingVertical: 6,
   },
   loadingText: {
     color: colors.muted,
     fontSize: typography.small,
   },
-  quickPrompts: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 10,
-  },
-  prompt: {
-    backgroundColor: colors.primarySoft,
-    borderRadius: radii.pill,
-    paddingHorizontal: 11,
-    paddingVertical: 8,
-  },
-  promptText: {
-    color: colors.primary,
-    fontSize: typography.tiny,
-    fontWeight: '800',
+  composerShell: {
+    backgroundColor: colors.background,
+    paddingBottom: 10,
+    paddingTop: 8,
   },
   composer: {
     alignItems: 'flex-end',
     backgroundColor: colors.surface,
     borderColor: colors.border,
-    borderRadius: radii.md,
+    borderRadius: 24,
     borderWidth: 1,
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 10,
     padding: 8,
   },
   input: {
@@ -618,5 +669,8 @@ const styles = StyleSheet.create({
     height: 42,
     justifyContent: 'center',
     width: 42,
+  },
+  sendButtonDisabled: {
+    backgroundColor: colors.borderStrong,
   },
 });

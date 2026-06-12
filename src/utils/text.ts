@@ -65,7 +65,7 @@ export function findRelevantChunks(chunks: DocumentChunk[], question: string, li
     return chunks.slice(0, limit);
   }
 
-  return [...chunks]
+  const matches = [...chunks]
     .map((chunk) => {
       const haystack = `${chunk.heading ?? ''} ${chunk.text}`.toLowerCase();
       const score = terms.reduce((total, term) => total + (haystack.includes(term) ? 1 : 0), 0);
@@ -75,6 +75,8 @@ export function findRelevantChunks(chunks: DocumentChunk[], question: string, li
     .filter((item) => item.score > 0)
     .slice(0, limit)
     .map((item) => item.chunk);
+
+  return matches.length > 0 ? matches : chunks.slice(0, limit);
 }
 
 export function chunksToCitations(chunks: DocumentChunk[]): Citation[] {

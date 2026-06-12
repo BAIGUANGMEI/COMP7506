@@ -115,14 +115,25 @@ export async function answerDocumentQuestion(input: {
     throw new Error('Choose a document before asking.');
   }
 
+  const apiKey = await getKimiApiKey();
+  const client = input.settings.hasApiKey && apiKey ? new KimiClient(input.settings, apiKey) : null;
   const indexedChunks = await searchChunks(db, input.documentId, input.question);
-  const fallbackChunks = indexedChunks.length > 0 ? indexedChunks : await listChunks(db, input.documentId);
+  let fallbackChunks = indexedChunks.length > 0 ? indexedChunks : await listChunks(db, input.documentId);
+
+  if (fallbackChunks.length === 0) {
+    const extractedText = await extractText(document, client);
+    const extractedChunks = chunkText(document.id, extractedText);
+
+    if (extractedChunks.length > 0) {
+      await replaceChunks(db, document.id, extractedChunks);
+      fallbackChunks = extractedChunks;
+    }
+  }
+
   const chunks = findRelevantChunks(fallbackChunks, input.question);
   const citations = chunksToCitations(chunks);
-  const apiKey = await getKimiApiKey();
 
-  if (input.settings.hasApiKey && apiKey) {
-    const client = new KimiClient(input.settings, apiKey);
+  if (client) {
     const content = await client.answerQuestion({
       question: input.question,
       title: document.title,
