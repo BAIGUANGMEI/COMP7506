@@ -25,6 +25,8 @@ interface ChatCompletionResponse {
   }>;
 }
 
+const KIMI_TEMPERATURE = 1;
+
 export class KimiClient {
   private readonly apiBase: string;
 
@@ -174,7 +176,7 @@ export class KimiClient {
       body: JSON.stringify({
         model: this.settings.chatModel,
         messages,
-        temperature: 0.2,
+        temperature: KIMI_TEMPERATURE,
       }),
     });
 
