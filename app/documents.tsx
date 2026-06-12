@@ -9,6 +9,7 @@ import { Screen } from '@/components/Screen';
 import { colors, radii, typography } from '@/constants/theme';
 import { useAppData } from '@/data/AppProvider';
 import type { AnalysisStatus } from '@/domain/types';
+import { goBackOrHome } from '@/utils/navigation';
 
 const STATUS_FILTERS: Array<{ label: string; value: AnalysisStatus | 'all' }> = [
   { label: 'All', value: 'all' },
@@ -53,7 +54,7 @@ export default function DocumentsScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
+        <Pressable accessibilityRole="button" onPress={() => goBackOrHome(router)} style={styles.backButton}>
           <MaterialCommunityIcons name="chevron-left" size={30} color={colors.text} />
         </Pressable>
         <View style={styles.headerCopy}>

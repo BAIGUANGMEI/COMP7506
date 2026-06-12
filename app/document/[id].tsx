@@ -11,6 +11,7 @@ import { useAppData } from '@/data/AppProvider';
 import type { DocumentSummary } from '@/domain/types';
 import { loadDocumentSummary } from '@/services/analysisService';
 import { confirmDestructiveAction } from '@/utils/confirm';
+import { goBackOrHome } from '@/utils/navigation';
 
 export default function DocumentDetailScreen() {
   const router = useRouter();
@@ -176,7 +177,7 @@ export default function DocumentDetailScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
+        <Pressable accessibilityRole="button" onPress={() => goBackOrHome(router)} style={styles.backButton}>
           <MaterialCommunityIcons name="chevron-left" size={30} color={colors.text} />
         </Pressable>
         <View style={styles.headerCopy}>
